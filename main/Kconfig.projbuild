@@ -1,0 +1,47 @@
+menu "Configuration"
+
+	config WIFI_SSID
+		string "WiFi SSID"
+		default "myssid"
+		help
+			SSID (network name) to connect to.
+
+	config WIFI_PASSWORD
+		string "WiFi Password"
+		default "mypassword"
+		help
+			WiFi password.
+
+	config MAXIMUM_RETRY
+		int "Maximum retry"
+		default 5
+		help
+			Set the maximum wifi connection retry count.
+
+	config INFLUX_IP
+		string "influxdb IP address"
+		default "192.168.1.1"
+
+	config INFLUX_PORT
+		string "influxdb port number"
+		default "8086"
+
+	config INFLUX_DB
+		string "influxdb database name"
+		default "test"
+
+	config INFLUX_SITE
+		string "sensor site tag"
+		default "mysite"
+
+	config INFLUX_PLACE
+		string "sensor place tag"
+		default "myplace"
+
+	config SAFE_TIMER
+		int "Safe timer"
+		default 3600
+		help
+			Set safe timer to wake up in any case. (sec)
+
+endmenu
