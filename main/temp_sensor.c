@@ -48,15 +48,18 @@
 
 #define BUF_SIZE 128
 
-/* FreeRTOS event group to signal when we are connected*/
-static EventGroupHandle_t s_wifi_event_group;
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
+static EventGroupHandle_t s_wifi_event_group;
 int s_retry_num = 0;
 
-static void event_handler(void* arg, esp_event_base_t event_base,
+
+/*
+ * Generic WIFI event handler taken from examples.
+ */
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     int32_t event_id, void* event_data)
 {
 	if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
@@ -70,7 +73,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 		} else {
 			xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
 		}
-		ESP_LOGI(__func__, "connect to the AP fail");
+		ESP_LOGI(__func__, "connect to the AP failed");
 	} else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
 		ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
 		ESP_LOGI(__func__, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
@@ -79,9 +82,27 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 	}
 }
 
+/*
+ * Connect to the WIFI AP.
+ */
 static int wifi_start()
 {
 	esp_err_t ret = ESP_OK;
+	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+	esp_event_handler_instance_t instance_any_id;
+	esp_event_handler_instance_t instance_got_ip;
+	EventBits_t bits;
+	wifi_config_t wifi_config = {
+		.sta = {
+			.ssid = CONFIG_WIFI_SSID,
+			.password = CONFIG_WIFI_PASSWORD,
+			.threshold.authmode = WIFI_AUTH_WPA2_PSK,
+			.pmf_cfg = {
+				.capable = true,
+				.required = false
+			},
+		},
+	};
 
 	ret = nvs_flash_init();
 	if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
@@ -98,34 +119,18 @@ static int wifi_start()
 	ESP_ERROR_CHECK(esp_event_loop_create_default());
 	esp_netif_create_default_wifi_sta();
 
-	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
 	ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-	esp_event_handler_instance_t instance_any_id;
-	esp_event_handler_instance_t instance_got_ip;
 	ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
 		    ESP_EVENT_ANY_ID,
-		    &event_handler,
+		    &wifi_event_handler,
 		    NULL,
 		    &instance_any_id));
 	ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
 		    IP_EVENT_STA_GOT_IP,
-		    &event_handler,
+		    &wifi_event_handler,
 		    NULL,
 		    &instance_got_ip));
-
-	wifi_config_t wifi_config = {
-		.sta = {
-			.ssid = CONFIG_WIFI_SSID,
-			.password = CONFIG_WIFI_PASSWORD,
-			.threshold.authmode = WIFI_AUTH_WPA2_PSK,
-
-			.pmf_cfg = {
-				.capable = true,
-				.required = false
-			},
-		},
-	};
 
 	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
 	ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
@@ -133,7 +138,8 @@ static int wifi_start()
 
 	ESP_LOGI(__func__, "wifi_init_sta finished.");
 
-	EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+	/* Wait for the connection handler */
+	bits = xEventGroupWaitBits(s_wifi_event_group,
 	    WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
 	    pdFALSE,
 	    pdFALSE,
@@ -161,7 +167,10 @@ static int wifi_start()
 	return ret;
 }
 
-esp_err_t http_event_handle(esp_http_client_event_t *evt)
+/*
+ * Generic handler to debug http response.
+ */
+esp_err_t http_event_handler(esp_http_client_event_t *evt)
 {
 	switch(evt->event_id) {
 		case HTTP_EVENT_ERROR:
@@ -183,7 +192,6 @@ esp_err_t http_event_handle(esp_http_client_event_t *evt)
 			if (!esp_http_client_is_chunked_response(evt->client)) {
 				printf("%.*s", evt->data_len, (char*)evt->data);
 			}
-
 			break;
 		case HTTP_EVENT_ON_FINISH:
 			ESP_LOGI(__func__, "HTTP_EVENT_ON_FINISH");
@@ -195,39 +203,45 @@ esp_err_t http_event_handle(esp_http_client_event_t *evt)
 	return ESP_OK;
 }
 
+/*
+ * Send the data to the influxdb server.
+ */
 static void send_data()
 {
+	esp_err_t err;
+	esp_http_client_handle_t client;
 	float temp = bmp280_ulp_get_temp();
 	float pres = bmp280_ulp_get_pres();
 	char * data = (char*)malloc(BUF_SIZE);
 
 	esp_http_client_config_t config = {
 		.url = INFLUX_URL,
-		.event_handler = http_event_handle,
+		.event_handler = http_event_handler,
 	};
 
 	if(data == NULL) {
 		return;
 	}
 
+	/* store the measurements and INFLUX_TAG in the buffer */
 	snprintf(data, BUF_SIZE, INFLUX_TAG " temp=%0.2f\n" INFLUX_TAG
 	    " pres=%0.2f\n", temp, pres);
 
-	ESP_LOGI(__func__, "Temp: %.2f C\n", temp);
-	ESP_LOGI(__func__, "Pres: %.2f hPa\n", pres);
-	ESP_LOGI(__func__, "INFLUX_URL= %s\n", INFLUX_URL);
-	ESP_LOGI(__func__, "INFLUX_TAG = %s\n", INFLUX_TAG);
+	ESP_LOGI(__func__, "Influxdb url: %s\n", INFLUX_URL);
+	ESP_LOGI(__func__, "Sent data:");
+	printf("%s", data);
 
-	esp_http_client_handle_t client = esp_http_client_init(&config);
+	client = esp_http_client_init(&config);
 	esp_http_client_set_method(client, HTTP_METHOD_POST);
 	esp_http_client_set_post_field(client, data, strlen(data));
-	esp_err_t err = esp_http_client_perform(client);
 
+	err = esp_http_client_perform(client);
 	if (err == ESP_OK) {
 		ESP_LOGI(__func__, "Status = %d, content_length = %lld",
 		    esp_http_client_get_status_code(client),
 		    esp_http_client_get_content_length(client));
 	}
+
 	esp_http_client_cleanup(client);
 
 	free(data);
@@ -243,13 +257,11 @@ void app_main()
 		if (wifi_start() == ESP_OK) {
 			send_data();
 		}
-
 	}
 
 	bmp280_ulp_enable();
 
-	ESP_LOGI(__func__, "Entering deep sleep\n\n");
+	ESP_LOGI(__func__, "Entering deep sleep\n");
 	vTaskDelay(20);
 	esp_deep_sleep_start();
 }
-
