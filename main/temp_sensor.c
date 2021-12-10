@@ -249,10 +249,19 @@ static void send_data()
 
 void app_main()
 {
+	bmp280_ulp_config_t config = {
+		.osrs_t = CONFIG_BMP_OSRST,
+		.osrs_p = CONFIG_BMP_OSRSP,
+		.filter = CONFIG_BMP_FILTER,
+		.t_diff = CONFIG_BMP_TDIFF,
+		.p_diff = CONFIG_BMP_PDIFF,
+		.period = CONFIG_BMP_PERIOD
+	};
+
 	esp_sleep_enable_timer_wakeup(((uint64_t)CONFIG_SAFE_TIMER * 1000000));
 
 	if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
-		bmp280_ulp_setup( NULL );
+		bmp280_ulp_setup(&config);
 	} else {
 		if (wifi_start() == ESP_OK) {
 			send_data();
