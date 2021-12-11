@@ -44,7 +44,8 @@
 
 #define INFLUX_URL "http://" CONFIG_INFLUX_IP ":" CONFIG_INFLUX_PORT \
     "/write?db=" CONFIG_INFLUX_DB
-#define INFLUX_TAG "baro,site=" CONFIG_INFLUX_SITE ",place=" CONFIG_INFLUX_PLACE
+#define INFLUX_TAG  CONFIG_INFLUX_MEAS ",site=" CONFIG_INFLUX_SITE ",place=" \
+    CONFIG_INFLUX_PLACE
 
 #define BUF_SIZE 128
 
@@ -132,9 +133,9 @@ static int wifi_start()
 		    NULL,
 		    &instance_got_ip));
 
-	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
-	ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
-	ESP_ERROR_CHECK(esp_wifi_start() );
+	ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+	ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+	ESP_ERROR_CHECK(esp_wifi_start());
 
 	ESP_LOGI(__func__, "wifi_init_sta finished.");
 

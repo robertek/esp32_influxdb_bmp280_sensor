@@ -24,6 +24,10 @@ menu "Configuration"
 		string "Influxdb database name"
 		default "test"
 
+	config INFLUX_MEAS
+		string "Influxdb measurement name"
+		default "baro"
+
 	config INFLUX_SITE
 		string "Measurement site tag"
 		default "mysite"
