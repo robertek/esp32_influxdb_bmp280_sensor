@@ -44,20 +44,20 @@ menu "Configuration"
 
 	config TDIFF
 		int "Temperature difference to wake up from ULP"
-		default 30
+		default 40
 		help
 			Temperature difference to wake up main CPU. It is
 			difference of raw values BMP280 provide.
-			30 is somewhere around 0.1C.
+			40 is somewhere around 0.1C.
 
 	config HDIFF
 		int "Pressure difference to wake up from ULP"
-		default 300
+		default 256
 		help
 			Humidity difference to wake up main CPU. It is
 			difference of raw values SH4x provides.
-			Humidity may be more variable, so 300 is around 1%
-			in the common case.
+			Humidity may be more variable, so the default is
+			256, which is around 0.5%.
 
 	config PERIOD
 		int "Period the ULP makes the measurement (s)"
