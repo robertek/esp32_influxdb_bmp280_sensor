@@ -39,7 +39,7 @@
 #include "esp_sleep.h"
 #include "esp_http_client.h"
 
-#include "bmp280_ulp_driver.h"
+#include "sh4x_ulp_driver.h"
 
 
 #define INFLUX_URL "http://" CONFIG_INFLUX_IP ":" CONFIG_INFLUX_PORT \
@@ -211,8 +211,8 @@ static void send_data()
 {
 	esp_err_t err;
 	esp_http_client_handle_t client;
-	float temp = bmp280_ulp_get_temp();
-	float pres = bmp280_ulp_get_pres();
+	float temp = sh4x_ulp_get_temp();
+	float humi = sh4x_ulp_get_humi();
 	char * data = (char*)malloc(BUF_SIZE);
 
 	esp_http_client_config_t config = {
@@ -226,7 +226,7 @@ static void send_data()
 
 	/* store the measurements and INFLUX_TAG in the buffer */
 	snprintf(data, BUF_SIZE, INFLUX_TAG " temp=%0.2f\n" INFLUX_TAG
-	    " pres=%0.2f\n", temp, pres);
+	    " humi=%0.2f\n", temp, humi);
 
 	ESP_LOGI(__func__, "Influxdb url: %s\n", INFLUX_URL);
 	ESP_LOGI(__func__, "Sent data:");
@@ -250,26 +250,23 @@ static void send_data()
 
 void app_main()
 {
-	bmp280_ulp_config_t config = {
-		.osrs_t = CONFIG_BMP_OSRST,
-		.osrs_p = CONFIG_BMP_OSRSP,
-		.filter = CONFIG_BMP_FILTER,
-		.t_diff = CONFIG_BMP_TDIFF,
-		.p_diff = CONFIG_BMP_PDIFF,
-		.period = CONFIG_BMP_PERIOD
+	sh4x_ulp_config_t config = {
+		.t_diff = CONFIG_TDIFF,
+		.h_diff = CONFIG_HDIFF,
+		.period = CONFIG_PERIOD
 	};
 
 	esp_sleep_enable_timer_wakeup(((uint64_t)CONFIG_SAFE_TIMER * 1000000));
 
 	if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED) {
-		bmp280_ulp_setup(&config);
+		sh4x_ulp_setup(&config);
 	} else {
 		if (wifi_start() == ESP_OK) {
 			send_data();
 		}
 	}
 
-	bmp280_ulp_enable();
+	sh4x_ulp_enable();
 
 	ESP_LOGI(__func__, "Entering deep sleep\n");
 	vTaskDelay(20);

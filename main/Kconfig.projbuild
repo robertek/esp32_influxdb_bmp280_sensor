@@ -42,44 +42,24 @@ menu "Configuration"
 		help
 			Set safe timer to wake up in any case. (sec)
 
-	config BMP_OSRST
-		int "Temperature resolution (1-5)"
-		default 1
-		help
-			Temperature resolution, values 1-5 are possible.
-			See the bmp280_ulp_driver.h for description.
-
-	config BMP_OSRSP
-		int "Pressure resolution (1-5)"
-		default 1
-		help
-			Pressure resolution, values 1-5 are possible.
-			See the bmp280_ulp_driver.h for description.
-
-	config BMP_FILTER
-		int "BMP280 filter settings (0-7)"
-		default 0
-		help
-			BMP filter, values 0-7 are possible.
-			See the BMP280 datasheet for description.
-
-	config BMP_TDIFF
+	config TDIFF
 		int "Temperature difference to wake up from ULP"
-		default 20
+		default 30
 		help
 			Temperature difference to wake up main CPU. It is
 			difference of raw values BMP280 provide.
-			20 is somewhere around 0.1C.
+			30 is somewhere around 0.1C.
 
-	config BMP_PDIFF
+	config HDIFF
 		int "Pressure difference to wake up from ULP"
-		default 10
+		default 300
 		help
-			Pressure difference to wake up main CPU. It is
-			difference of raw values BMP280 provide.
-			10 is somewhere around 0.39hPa.
+			Humidity difference to wake up main CPU. It is
+			difference of raw values SH4x provides.
+			Humidity may be more variable, so 300 is around 1%
+			in the common case.
 
-	config BMP_PERIOD
+	config PERIOD
 		int "Period the ULP makes the measurement (s)"
 		default 5
 		help
