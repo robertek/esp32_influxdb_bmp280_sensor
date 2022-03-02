@@ -70,4 +70,29 @@ menu "Configuration"
 		default 13
 		help
 			Set a GPIO number for the notification LED. (optional)
+	config BATT_EN
+		int "Battery measurement enable GPIO"
+		default 16
+		help
+			Set a GPIO number for enabling battery measurement. (optional)
+	config BATT_CHANNEL
+		int "Battery ADC2 channel"
+		default 0
+		help
+			Set the ADC channel for the battery. (optional)
+	config BATT_COEF
+		int "Battery voltage multiply coefficient"
+		default 11
+		help
+			Multiply coefficient based on voltage divider. (optional)
+	config BATT_OFFSET
+		int "Battery voltage offset"
+		default 0
+		help
+			Offset the final voltage (calibration). (optional)
+	config BATT_WAIT
+		int "Wait for the battery measurement to settle (ms)"
+		default 100
+		help
+			Wait for the battery to settle (load capacitor, etc).
 endmenu

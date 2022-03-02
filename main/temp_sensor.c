@@ -39,6 +39,8 @@
 #include "esp_sleep.h"
 #include "esp_http_client.h"
 #include "driver/gpio.h"
+#include "driver/adc.h"
+#include "esp_adc_cal.h"
 
 #include "sh4x_ulp_driver.h"
 
@@ -50,7 +52,7 @@
 
 #define BUF_SIZE 128
 
-#define OUTPUT_PINS  (1ULL<<CONFIG_LED_GPIO)
+#define OUTPUT_PINS  ((1ULL<<CONFIG_LED_GPIO) | (1ULL<<CONFIG_BATT_EN))
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
@@ -58,6 +60,7 @@
 static EventGroupHandle_t s_wifi_event_group;
 int s_retry_num = 0;
 
+int battery_voltage;
 
 /*
  * Generic WIFI event handler taken from examples.
@@ -228,7 +231,8 @@ static void send_data()
 
 	/* store the measurements and INFLUX_TAG in the buffer */
 	snprintf(data, BUF_SIZE, INFLUX_TAG " temp=%0.2f\n" INFLUX_TAG
-	    " humi=%0.2f\n", temp, humi);
+	    " humi=%0.2f\n" INFLUX_TAG " batt=%d\n", temp, humi,
+	    battery_voltage);
 
 	ESP_LOGI(__func__, "Influxdb url: %s\n", INFLUX_URL);
 	ESP_LOGI(__func__, "Sent data:");
@@ -250,7 +254,7 @@ static void send_data()
 	free(data);
 }
 
-void ports_init()
+static void ports_init()
 {
 	gpio_config_t io_conf = {};
 
@@ -260,6 +264,54 @@ void ports_init()
 	io_conf.pull_down_en = 0;
 	io_conf.pull_up_en = 0;
 	gpio_config(&io_conf);
+
+	adc2_config_channel_atten(CONFIG_BATT_CHANNEL, ADC_ATTEN_0db);
+}
+
+static void read_battery()
+{
+	esp_err_t ret;
+	int raw;
+	bool calib_enable;
+	esp_adc_cal_characteristics_t adc2_chars;
+
+	/* enable the measurement switch */
+	gpio_set_level(CONFIG_BATT_EN, 1);
+
+	/* get the voltage calibration data */
+	ret = esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_VREF);
+	if (ret == ESP_ERR_NOT_SUPPORTED) {
+		ESP_LOGW(__func__, "Calibration scheme not supported");
+	} else if (ret == ESP_ERR_INVALID_VERSION) {
+		ESP_LOGW(__func__, "eFuse not burnt");
+	} else if (ret == ESP_OK) {
+		calib_enable = true;
+		esp_adc_cal_characterize(ADC_UNIT_2, ADC_ATTEN_0db,
+		    ADC_WIDTH_BIT_DEFAULT, 0, &adc2_chars);
+	} else {
+		ESP_LOGE(__func__, "Invalid arg");
+	}
+
+	/* wait for the measurement to settle after switch */
+	vTaskDelay(CONFIG_BATT_WAIT/portTICK_PERIOD_MS);
+
+	/* read the raw value */
+	do {
+		ret = adc2_get_raw(CONFIG_BATT_CHANNEL, ADC_WIDTH_BIT_DEFAULT,
+		    &raw);
+        } while (ret == ESP_ERR_INVALID_STATE);
+
+	/* transform to the real voltage */
+	if (calib_enable) {
+		battery_voltage = esp_adc_cal_raw_to_voltage(raw, &adc2_chars);
+		battery_voltage = battery_voltage * CONFIG_BATT_COEF;
+		battery_voltage += CONFIG_BATT_OFFSET;
+	} else {
+		battery_voltage = 0;
+	}
+
+	/* disable the measurement switch */
+	gpio_set_level(CONFIG_BATT_EN, 0);
 }
 
 void app_main()
@@ -277,6 +329,7 @@ void app_main()
 	} else {
 		ports_init();
 		gpio_set_level(CONFIG_LED_GPIO, 1);
+		read_battery();
 
 		if (wifi_start() == ESP_OK) {
 			send_data();
