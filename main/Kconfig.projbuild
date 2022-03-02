@@ -65,4 +65,9 @@ menu "Configuration"
 		help
 			It is the number of the ULP wakeup cycles it makes
 			a measurement. The ULP wakes up every 1s.
+	config LED_GPIO
+		int "LED GPIO"
+		default 13
+		help
+			Set a GPIO number for the notification LED. (optional)
 endmenu
